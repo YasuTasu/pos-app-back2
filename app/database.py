@@ -13,19 +13,22 @@ if not DATABASE_URL:
 # ✅ デバッグ用ログ（Azure のログで確認する）
 print(f"✅ 使用する DATABASE_URL: {DATABASE_URL}")
 
-# ✅ Azure 用の SSL 証明書パス
-ssl_cert_path = "/home/site/wwwroot/DigiCertGlobalRootCA.crt.pem"  # Azure 環境用
-if not os.path.exists(ssl_cert_path):
-    print("⚠️ SSL 証明書が見つかりません！")
-    ssl_cert_path = None  # 証明書なしで接続
+# ✅ SSL 証明書パスの設定（環境変数から取得可能にする）
+ssl_cert_path = os.getenv("SSL_CERT_PATH", "/home/site/wwwroot/DigiCertGlobalRootCA.crt.pem")
 
-# ✅ MySQL エンジン作成（pool_pre_ping=True を追加して安定化）
+# 🔥 Azure でもローカルでも `SSL_CERT_PATH` がない場合は無視
+if ssl_cert_path and not os.path.exists(ssl_cert_path):
+    print(f"⚠️ 指定された SSL 証明書が見つかりません: {ssl_cert_path}")
+    ssl_cert_path = None
+
+# ✅ MySQL エンジン作成（pool_pre_ping=True で接続安定化）
 connect_args = {"ssl": {"ca": ssl_cert_path}} if ssl_cert_path else {}
 
 try:
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
-    with engine.connect() as connection:
-        print("✅ データベース接続成功")
+    connection = engine.connect()  # 🔥 DB 接続テスト
+    print("✅ データベース接続成功")
+    connection.close()  # 明示的にクローズ
 except Exception as e:
     print(f"❌ データベース接続失敗: {e}")
 
@@ -37,7 +40,7 @@ Base = declarative_base()
 
 # ✅ モデル定義
 class Product(Base):
-    __tablename__ = "product"
+    __tablename__ = "product"  # 🔥 MySQL では小文字に統一
     JAN = Column(String(13), primary_key=True)
     name = Column(String(100))
     price = Column(Integer)
